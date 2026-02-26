@@ -27,35 +27,22 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: [true, 'Password is required'],
       minlength: [6, 'Password must be at least 6 characters long'],
-      select: false, // Don't return password by default
+      select: false,
     },
   },
-  {
-    timestamps: true,
-    toJSON: {
-      transform: function (doc, ret) {
-        delete ret.password;
-        return ret;
-      },
-    },
-  }
+  { timestamps: true }
 );
 
 // 🔐 Hash password before saving
-userSchema.pre('save', async function (next) {
-  if (!this.isModified('password')) return next();
-
+userSchema.pre('save', async function () {
+  if (!this.isModified('password')) return;
   this.password = await bcrypt.hash(this.password, SALT_ROUNDS);
-  next();
 });
 
-// 🔑 Compare password method
+// 🔑 Compare password
 userSchema.methods.comparePassword = async function (candidatePassword) {
   return bcrypt.compare(candidatePassword, this.password);
 };
-
-// 📌 Create index (extra safety)
-userSchema.index({ email: 1 });
 
 const UserModel = mongoose.model('User', userSchema);
 
