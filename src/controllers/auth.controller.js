@@ -1,5 +1,6 @@
 import UserModel from '../models/user.model.js';
 import jwt from 'jsonwebtoken';
+import { sendWelcomeEmail } from '../services/email.service.js';
 
 function generateToken(userId) {
   return jwt.sign({ userId }, process.env.JWT_SECRET, {
@@ -52,7 +53,7 @@ export async function userRegisterController(req, res) {
       maxAge: 3 * 24 * 60 * 60 * 1000,
     });
 
-    return res.status(201).json({
+    res.status(201).json({
       message: 'User registered successfully',
       user: {
         _id: newUser._id,
@@ -61,10 +62,12 @@ export async function userRegisterController(req, res) {
       },
     });
 
+    await sendWelcomeEmail(newUser.email, newUser.name);
+
   } catch (error) {
     console.error('Error registering user:', error);
 
-    return res.status(500).json({
+    res.status(500).json({
       message: 'Error registering user',
       error:
         process.env.NODE_ENV === 'development'
@@ -118,7 +121,7 @@ export async function userLoginController(req, res) {
       maxAge: 3 * 24 * 60 * 60 * 1000,
     });
 
-    return res.status(200).json({
+    res.status(200).json({
       message: 'User logged in successfully',
       user: {
         _id: user._id,
@@ -129,7 +132,7 @@ export async function userLoginController(req, res) {
   } catch (error) {
     console.error('Error logging in user:', error);
 
-    return res.status(500).json({
+    res.status(500).json({
       message: 'Error logging in user',
       error:
         process.env.NODE_ENV === 'development'
