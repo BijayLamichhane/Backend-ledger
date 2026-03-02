@@ -46,8 +46,13 @@ export async function userRegisterController(req, res) {
       sameSite: "strict",
       maxAge: 3 * 24 * 60 * 60 * 1000,
     });
+    
+    // Send email asynchronously (non-blocking)
+    sendWelcomeEmail(newUser.email, newUser.name).catch((err) =>
+      console.error("Welcome email failed:", err)
+    );
 
-    res.status(201).json({
+    return res.status(201).json({
       message: "User registered successfully",
       user: {
         _id: newUser._id,
@@ -56,14 +61,10 @@ export async function userRegisterController(req, res) {
       },
     });
 
-    // Send email asynchronously (non-blocking)
-    sendWelcomeEmail(newUser.email, newUser.name).catch((err) =>
-      console.error("Welcome email failed:", err)
-    );
   } catch (error) {
     console.error("Error registering user:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       message: "Error registering user",
       error:
         process.env.NODE_ENV === "development" ? error.message : undefined,
@@ -113,7 +114,7 @@ export async function userLoginController(req, res) {
       maxAge: 3 * 24 * 60 * 60 * 1000,
     });
 
-    res.status(200).json({
+    return res.status(200).json({
       message: "User logged in successfully",
       user: {
         _id: user._id,
@@ -124,7 +125,7 @@ export async function userLoginController(req, res) {
   } catch (error) {
     console.error("Error logging in user:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       message: "Error logging in user",
       error:
         process.env.NODE_ENV === "development" ? error.message : undefined,
