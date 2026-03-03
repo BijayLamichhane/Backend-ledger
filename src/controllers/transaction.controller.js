@@ -1,60 +1,130 @@
+import mongoose from "mongoose";
 import AccountModel from "../models/account.model.js";
 import TransactionModel from "../models/transaction.model.js";
-
+import LedgerModel from "../models/ledger.model.js";
+import { sendTransactionEmail } from "../services/email.service.js";
 
 export async function createTransaction(req, res) {
+  const session = await mongoose.startSession();
+
   try {
     const { fromAccount, toAccount, amount, idempotencyKey } = req.body;
 
-    // Validate request body
     if (!fromAccount || !toAccount || !amount || !idempotencyKey) {
       return res.status(400).json({ message: "All fields are required" });
     }
 
-    const formUserAccount = await AccountModel.findById({_id: fromAccount});
-    const toUserAccount = await AccountModel.findById({_id: toAccount}); 
+    const fromUserAccount = await AccountModel.findById(fromAccount);
+    const toUserAccount = await AccountModel.findById(toAccount);
 
-    if (!formUserAccount || !toUserAccount) {
+    if (!fromUserAccount || !toUserAccount) {
       return res.status(400).json({ message: "Invalid account IDs" });
     }
 
-    const isTransactionAlreadyExist = await TransactionModel.findOne({
+    // Idempotency protection
+    const existingTransaction = await TransactionModel.findOne({
       idempotencyKey,
     });
 
-    if (isTransactionAlreadyExist) {
-      if (isTransactionAlreadyExist.status === "COMPLETED") {
-        return res.status(400).json({ message: "Transaction already processed", transaction: isTransactionAlreadyExist });
-      } 
-
-      if (isTransactionAlreadyExist.status === "PENDING") {
-        return res.status(400).json({ message: "Transaction is pending"});
-      }
-
-      if (isTransactionAlreadyExist.status === "FAILED") {
-        return res.status(400).json({ message: "Transaction failed, please try again"});
-      }
-
-      if (isTransactionAlreadyExist.status === "REVERSED") {
-        return res.status(400).json({ message: "Transaction reversed, please try again"});
-      }
+    if (existingTransaction) {
+      return res.status(400).json({
+        message: `Transaction already ${existingTransaction.status.toLowerCase()}`,
+        transaction: existingTransaction,
+      });
     }
 
-    if (formUserAccount.status !== "ACTIVE" || toUserAccount.status !== "ACTIVE") {
-      return res.status(400).json({ message: "One or both accounts are inactive" });
+    // Account status check
+    if (
+      fromUserAccount.status !== "ACTIVE" ||
+      toUserAccount.status !== "ACTIVE"
+    ) {
+      return res
+        .status(400)
+        .json({ message: "One or both accounts are inactive" });
     }
 
-    if (formUserAccount.currency !== toUserAccount.currency) {
-      return res.status(400).json({ message: "Accounts must be in the same currency" });
+    // Currency check
+    if (fromUserAccount.currency !== toUserAccount.currency) {
+      return res
+        .status(400)
+        .json({ message: "Accounts must use same currency" });
     }
 
-    const fromAccountBalance = await formUserAccount.getBalance();
-    if (fromAccountBalance.balance < amount) {
+    // Balance check
+    const fromBalance = await fromUserAccount.getBalance();
+
+    if (fromBalance < amount) {
       return res.status(400).json({ message: "Insufficient balance" });
     }
 
+    /* =========================
+       START DATABASE TRANSACTION
+    ========================= */
+
+    session.startTransaction();
+
+    const [transaction] = await TransactionModel.create(
+      [
+        {
+          fromAccount,
+          toAccount,
+          amount,
+          idempotencyKey,
+          status: "PENDING",
+        },
+      ],
+      { session }
+    );
+
+    await LedgerModel.create(
+      [
+        {
+          account: fromAccount,
+          amount: amount,
+          transaction: transaction._id,
+          type: "DEBIT",
+        },
+        {
+          account: toAccount,
+          amount: amount,
+          transaction: transaction._id,
+          type: "CREDIT",
+        },
+      ],
+      { session }
+    );
+
+    transaction.status = "COMPLETED";
+    await transaction.save({ session });
+
+    await session.commitTransaction();
+    session.endSession();
+
+    /* =========================
+       SEND EMAIL
+    ========================= */
+
+    await sendTransactionEmail(
+      req.user.email,
+      req.user.name,
+      amount,
+      toAccount
+    );
+
+    res.status(201).json({
+      message: "Transaction processed successfully",
+      transaction,
+    });
+
   } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+
     console.error("Transaction error:", error.message);
-    res.status(500).json({ message: error.message });
+
+    res.status(500).json({
+      message: "Transaction failed",
+      error: error.message,
+    });
   }
 }

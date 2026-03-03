@@ -14,17 +14,20 @@ export const transporter = nodemailer.createTransport({
   },
 });
 
-// Verify transporter
 async function verifyTransporter() {
   try {
     await transporter.verify();
-    console.log("✅ Email server is ready to send messages");
+    console.log("✅ Email server ready");
   } catch (error) {
-    console.error("❌ Error connecting to email server:", error.message);
+    console.error("❌ Email server error:", error.message);
   }
 }
 
 verifyTransporter();
+
+/* =============================
+   SEND EMAIL CORE FUNCTION
+============================= */
 
 export const sendEmail = async (to, subject, text = "", html = "") => {
   try {
@@ -36,68 +39,143 @@ export const sendEmail = async (to, subject, text = "", html = "") => {
       html,
     });
 
-    console.log("✅ Email sent:", info.messageId);
-
+    console.log("📧 Email sent:", info.messageId);
     return info;
-
   } catch (error) {
-    console.error("❌ Error sending email:", error.message);
+    console.error("❌ Email sending failed:", error.message);
     throw error;
   }
 };
 
-export async function sendWelcomeEmail(userEmail, name) {
-  const subject = "Welcome to Backend Ledger 🎉";
+/* =============================
+   GLOBAL EMAIL TEMPLATE
+============================= */
 
-  const text = `Hello ${name},
-
-Welcome to Backend Ledger!
-
-We're excited to have you on board. You can now start managing your backend projects easily.
-
-Best regards,
-Backend Ledger Team
-`;
-
-  const html = `
-  <div style="font-family: Arial, sans-serif; background:#f4f6f8; padding:40px 0;">
-    <div style="max-width:600px; margin:auto; background:#ffffff; border-radius:8px; padding:30px; box-shadow:0 2px 6px rgba(0,0,0,0.05);">
+function emailLayout(title, content) {
+  return `
+  <div style="font-family:Arial,Helvetica,sans-serif;background:#f4f6f8;padding:40px 0;">
+    
+    <div style="max-width:600px;margin:auto;background:#ffffff;border-radius:10px;padding:35px;box-shadow:0 4px 12px rgba(0,0,0,0.06);">
       
-      <h2 style="color:#333; margin-top:0;">Welcome to Backend Ledger 🎉</h2>
+      <h1 style="color:#2563eb;text-align:center;margin-bottom:20px;">
+        Backend Ledger
+      </h1>
 
-      <p style="font-size:16px; color:#555;">
-        Hello <strong>${name}</strong>,
-      </p>
+      <h2 style="color:#333;margin-bottom:20px;">${title}</h2>
 
-      <p style="font-size:16px; color:#555;">
-        Thank you for signing up for <strong>Backend Ledger</strong>. 
-        We're excited to have you join our platform.
-      </p>
+      ${content}
 
-      <p style="font-size:16px; color:#555;">
-        You can now start managing and tracking your backend projects efficiently.
-      </p>
+      <hr style="border:none;border-top:1px solid #eee;margin:30px 0;">
 
-      <div style="text-align:center; margin:30px 0;">
-        <a href="#"
-           style="background:#2563eb; color:#ffffff; padding:12px 22px; text-decoration:none; border-radius:6px; font-size:15px; display:inline-block;">
-           Get Started
-        </a>
-      </div>
-
-      <p style="font-size:14px; color:#777;">
-        If you have any questions, feel free to reply to this email.
-      </p>
-
-      <hr style="border:none; border-top:1px solid #eee; margin:25px 0;">
-
-      <p style="font-size:13px; color:#999; text-align:center;">
-        © ${new Date().getFullYear()} Backend Ledger. All rights reserved.
+      <p style="font-size:13px;color:#888;text-align:center;">
+        © ${new Date().getFullYear()} Backend Ledger
       </p>
 
     </div>
   </div>
   `;
+}
 
-  await sendEmail(userEmail, subject, text, html);
+/* =============================
+   WELCOME EMAIL
+============================= */
+
+export async function sendWelcomeEmail(email, name) {
+  const subject = "Welcome to Backend Ledger 🎉";
+
+  const html = emailLayout(
+    "Welcome to Backend Ledger 🎉",
+    `
+    <p>Hello <strong>${name}</strong>,</p>
+
+    <p>
+      Thank you for joining <strong>Backend Ledger</strong>. 
+      We're excited to have you on board.
+    </p>
+
+    <div style="text-align:center;margin:30px 0;">
+      <a href="#"
+      style="background:#2563eb;color:#fff;padding:12px 24px;
+      text-decoration:none;border-radius:6px;font-weight:bold;">
+      Get Started
+      </a>
+    </div>
+
+    <p>If you have any questions, feel free to reply to this email.</p>
+  `
+  );
+
+  await sendEmail(email, subject, "", html);
+}
+
+/* =============================
+   TRANSACTION SUCCESS
+============================= */
+
+export async function sendTransactionEmail(userEmail, name, amount, toAccount) {
+  const subject = "Transaction Successful ✅";
+
+  const html = emailLayout(
+    "Transaction Successful",
+    `
+    <p>Hello <strong>${name}</strong>,</p>
+
+    <p>Your transaction has been successfully processed.</p>
+
+    <table style="width:100%;border-collapse:collapse;margin-top:20px;">
+      <tr>
+        <td style="padding:10px;border:1px solid #eee;"><strong>To</strong></td>
+        <td style="padding:10px;border:1px solid #eee;">${toAccount}</td>
+      </tr>
+      <tr>
+        <td style="padding:10px;border:1px solid #eee;"><strong>Amount</strong></td>
+        <td style="padding:10px;border:1px solid #eee;">NPR ${Number(amount).toFixed(2)}</td>
+      </tr>
+      <tr>
+        <td style="padding:10px;border:1px solid #eee;"><strong>Status</strong></td>
+        <td style="padding:10px;border:1px solid #eee;color:green;">Successful</td>
+      </tr>
+    </table>
+  `
+  );
+
+  await sendEmail(userEmail, subject, "", html);
+}
+
+/* =============================
+   TRANSACTION FAILED
+============================= */
+
+export async function sendTransactionFailedEmail(userEmail, name, amount, toAccount) {
+  const subject = "Transaction Failed ❌";
+
+  const html = emailLayout(
+    "Transaction Failed",
+    `
+    <p>Hello <strong>${name}</strong>,</p>
+
+    <p>Unfortunately your transaction could not be processed.</p>
+
+    <table style="width:100%;border-collapse:collapse;margin-top:20px;">
+      <tr>
+        <td style="padding:10px;border:1px solid #eee;"><strong>To</strong></td>
+        <td style="padding:10px;border:1px solid #eee;">${toAccount}</td>
+      </tr>
+      <tr>
+        <td style="padding:10px;border:1px solid #eee;"><strong>Amount</strong></td>
+        <td style="padding:10px;border:1px solid #eee;">NPR ${Number(amount).toFixed(2)}</td>
+      </tr>
+      <tr>
+        <td style="padding:10px;border:1px solid #eee;"><strong>Status</strong></td>
+        <td style="padding:10px;border:1px solid #eee;color:red;">Failed</td>
+      </tr>
+    </table>
+
+    <p style="margin-top:20px;">
+      If the issue persists, please contact our support team.
+    </p>
+  `
+  );
+
+  await sendEmail(userEmail, subject, "", html);
 }
