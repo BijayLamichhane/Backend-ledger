@@ -89,7 +89,7 @@ export async function sendWelcomeEmail(email, name) {
     <p>Hello <strong>${name}</strong>,</p>
 
     <p>
-      Thank you for joining <strong>Backend Ledger</strong>. 
+      Thank you for joining <strong>Backend Ledger</strong>.
       We're excited to have you on board.
     </p>
 
@@ -102,45 +102,105 @@ export async function sendWelcomeEmail(email, name) {
     </div>
 
     <p>If you have any questions, feel free to reply to this email.</p>
-  `
+    `
   );
 
   await sendEmail(email, subject, "", html);
 }
 
-/* =============================
-   TRANSACTION SUCCESS
-============================= */
+/**
+ * Sends a DEBIT notification to the sender and a CREDIT notification to the receiver.
+ *
+ * @param {object} sender   - { email, name }
+ * @param {object} receiver - { email, name }
+ * @param {number} amount
+ * @param {string} currency - e.g. "NPR"
+ */
+export async function sendTransactionEmail(sender, receiver, amount, currency = "NPR") {
+  if (!receiver?.email || !receiver?.name) {
+    console.error("❌ sendTransactionEmail: receiver email/name missing — receiver email skipped.", receiver);
+  }
 
-export async function sendTransactionEmail(userEmail, name, amount, toAccount) {
-  const subject = "Transaction Successful ✅";
+  const formatted = `${currency} ${Number(amount).toFixed(2)}`;
 
-  const html = emailLayout(
-    "Transaction Successful",
-    `
-    <p>Hello <strong>${name}</strong>,</p>
-
-    <p>Your transaction has been successfully processed.</p>
-
-    <table style="width:100%;border-collapse:collapse;margin-top:20px;">
+  function transactionRow(label, value, valueColor = "#333") {
+    return `
       <tr>
-        <td style="padding:10px;border:1px solid #eee;"><strong>To</strong></td>
-        <td style="padding:10px;border:1px solid #eee;">${toAccount}</td>
-      </tr>
-      <tr>
-        <td style="padding:10px;border:1px solid #eee;"><strong>Amount</strong></td>
-        <td style="padding:10px;border:1px solid #eee;">NPR ${Number(amount).toFixed(2)}</td>
-      </tr>
-      <tr>
-        <td style="padding:10px;border:1px solid #eee;"><strong>Status</strong></td>
-        <td style="padding:10px;border:1px solid #eee;color:green;">Successful</td>
-      </tr>
-    </table>
-  `
-  );
+        <td style="padding:10px 14px;border:1px solid #eee;color:#555;width:40%;">${label}</td>
+        <td style="padding:10px 14px;border:1px solid #eee;color:${valueColor};font-weight:600;">${value}</td>
+      </tr>`;
+  }
 
-  await sendEmail(userEmail, subject, "", html);
+  function buildHtml({ name, type, counterpartyLabel, counterpartyName }) {
+    const isDebit = type === "DEBIT";
+    const badgeColor = isDebit ? "#dc2626" : "#16a34a";
+    const badgeBg   = isDebit ? "#fef2f2" : "#f0fdf4";
+    const typeLabel = isDebit ? "💸 Debited (Sent)"  : "💰 Credited (Received)";
+    const title     = isDebit ? "Money Sent"         : "Money Received";
+    const subtitle  = isDebit
+      ? "Your transfer has been processed successfully."
+      : "You have received a transfer.";
+
+    return emailLayout(
+      title,
+      `
+      <p>Hello <strong>${name}</strong>,</p>
+      <p>${subtitle}</p>
+
+      <div style="text-align:center;margin:20px 0;">
+        <span style="
+          display:inline-block;
+          padding:6px 18px;
+          border-radius:20px;
+          background:${badgeBg};
+          color:${badgeColor};
+          font-weight:700;
+          font-size:14px;
+          letter-spacing:0.5px;
+        ">${typeLabel}</span>
+      </div>
+
+      <table style="width:100%;border-collapse:collapse;margin-top:10px;">
+        ${transactionRow("Transaction Type", isDebit ? "DEBIT" : "CREDIT", badgeColor)}
+        ${transactionRow(isDebit ? "Sent To" : "Received From", counterpartyName)}
+        ${transactionRow("Amount", formatted, badgeColor)}
+        ${transactionRow("Status", "✅ Completed", "#16a34a")}
+      </table>
+
+      <p style="margin-top:20px;font-size:13px;color:#888;">
+        If you did not authorise this transaction, please contact support immediately.
+      </p>
+      `
+    );
+  }
+
+  // Fire both emails concurrently
+  await Promise.all([
+    sendEmail(
+      sender.email,
+      `💸 You sent ${formatted} — Transaction Successful`,
+      "",
+      buildHtml({
+        name: sender.name,
+        type: "DEBIT",
+        counterpartyLabel: "Sent To",
+        counterpartyName: receiver.name,
+      })
+    ),
+    sendEmail(
+      receiver.email,
+      `💰 You received ${formatted} — Transaction Successful`,
+      "",
+      buildHtml({
+        name: receiver.name,
+        type: "CREDIT",
+        counterpartyLabel: "Received From",
+        counterpartyName: sender.name,
+      })
+    ),
+  ]);
 }
+
 
 /* =============================
    TRANSACTION FAILED

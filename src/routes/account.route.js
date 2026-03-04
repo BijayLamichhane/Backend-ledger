@@ -1,15 +1,15 @@
 import express from 'express';
 import { authMiddleware } from '../middleware/auth.middleware.js';
-import { createAccountControlller } from '../controllers/account.controller.js';
+import { createAccountController } from '../controllers/account.controller.js';
 
 const router = express.Router();
 
 /**
- * @route POST /account/create
+ * @route POST /api/accounts
  * @desc Create a new account
  * @access Private
  */
-router.post('/', authMiddleware, createAccountControlller);
+router.post('/', authMiddleware, createAccountController);
 
 
 

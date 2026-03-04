@@ -28,6 +28,11 @@ const accountSchema = new mongoose.Schema(
       match: [/^[A-Z]{3}$/, "Currency must be a valid 3-letter currency code"],
       default: "NPR",
     },
+
+    systemUser: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,
@@ -38,36 +43,27 @@ const accountSchema = new mongoose.Schema(
 accountSchema.index({ user: 1, currency: 1 }, { unique: true });
 
 accountSchema.methods.getBalance = async function () {
-  const balanceData = await LedgerModel.aggregate([
+  const result = await LedgerModel.aggregate([
     {
-      $match: {
-        account: this._id,
-      },
+      $match: { account: this._id }
     },
     {
       $group: {
-        _id: null,
-        totalDebit: {
+        _id: "$account",
+        balance: {
           $sum: {
-            $cond: [{ $eq: ["$type", "DEBIT"] }, "$amount", 0],
-          },
-        },
-        totalCredit: {
-          $sum: {
-            $cond: [{ $eq: ["$type", "CREDIT"] }, "$amount", 0],
-          },
-        },
-      },
-    },
-    {
-      $project: {
-        _id: 0,
-        balance: { $subtract: ["$totalCredit", "$totalDebit"] },
-      },
-    },
+            $cond: [
+              { $eq: ["$type", "CREDIT"] },
+              "$amount",
+              { $multiply: ["$amount", -1] }
+            ]
+          }
+        }
+      }
+    }
   ]);
 
-  return balanceData.length ? balanceData[0].balance : 0;
+  return result.length ? result[0].balance : 0;
 };
 
 const AccountModel = mongoose.model("Account", accountSchema);

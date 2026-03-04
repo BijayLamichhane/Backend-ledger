@@ -1,6 +1,6 @@
 import AccountModel from '../models/account.model.js';
 
-export async function createAccountControlller(req, res) {
+export async function createAccountController(req, res) {
   try {
     const user = req.user;
 
