@@ -1,6 +1,6 @@
 import express from 'express';
 import { authMiddleware } from '../middleware/auth.middleware.js';
-import { createAccountController } from '../controllers/account.controller.js';
+import { createAccountController, getUsersAccountsController, getAccountBalanceController } from '../controllers/account.controller.js';
 
 const router = express.Router();
 
@@ -10,6 +10,8 @@ const router = express.Router();
  * @access Private
  */
 router.post('/', authMiddleware, createAccountController);
+router.get('/', authMiddleware, getUsersAccountsController);
+router.get('/balance/:accountId', authMiddleware, getAccountBalanceController);
 
 
 
