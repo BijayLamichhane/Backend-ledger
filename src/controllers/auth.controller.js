@@ -1,6 +1,7 @@
 import UserModel from "../models/user.model.js";
 import jwt from "jsonwebtoken";
 import { sendWelcomeEmail } from "../services/email.service.js";
+import TokenBlacklist from "../models/blacklist.model.js";
 
 function generateToken(userId) {
   return jwt.sign({ userId }, process.env.JWT_SECRET, {
@@ -127,6 +128,39 @@ export async function userLoginController(req, res) {
 
     return res.status(500).json({
       message: "Error logging in user",
+      error:
+        process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+}
+
+/**
+ * @route POST /api/auth/logout
+ * @desc Logout a user
+ * @access Public
+ */
+export async function userLogoutController(req, res) {
+  try {
+    const token = req.cookies.token || req.headers.authorization?.split(" ")[1];
+    if (!token) {
+      return res.status(400).json({ message: "No token provided" });
+    }
+
+    res.clearCookie("token", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+    });
+
+    // Add token to blacklist
+    await TokenBlacklist.create({ token });
+
+    return res.status(200).json({ message: "User logged out successfully" });
+  } catch (error) {
+    console.error("Error logging out user:", error);
+
+    return res.status(500).json({
+      message: "Error logging out user",
       error:
         process.env.NODE_ENV === "development" ? error.message : undefined,
     });
